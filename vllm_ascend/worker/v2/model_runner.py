@@ -65,6 +65,8 @@ from vllm_ascend.attention.attention_c8_mxfp import (
     fill_mxfp_v_scale_cache,
 )
 from vllm_ascend.attention.attention_v1 import AscendAttentionBackend
+from vllm_ascend.attention.flash_attention_v3 import AscendFlashAttentionBackend as AscendFA3Backend
+from vllm_ascend.attention.flash_attention_v3 import AscendQwenFlashAttentionBackend
 from vllm_ascend.attention.flashmla import prepare_flashmla_batch_req_state
 from vllm_ascend.attention.mla_v1 import AscendMLABackend, all_mla_use_flashmla
 from vllm_ascend.core.kv_cache_interface import is_circular_kv_cache_spec
@@ -92,6 +94,7 @@ from vllm_ascend.distributed.kv_transfer.sparse_kv_offload.sparse_kv_offload_man
     init_sparse_kv_offload_manager,
 )
 from vllm_ascend.models.deepseek_v41.cache_config import uses_a5_packed_cache
+from vllm_ascend.ops.gdn_attn_builder import AscendGDNFusedAttentionBackend
 from vllm_ascend.ops.rotary_embedding import set_cos_and_sin, update_cos_sin
 from vllm_ascend.utils import (
     is_c8_mxfp_kv_quant,
@@ -1228,6 +1231,49 @@ class NPUModelRunner(GPUModelRunner):
     def _can_skip_spec_cpu_length_sync(self) -> bool:
         """Use device lengths for K3/DSpark FlashMLA, including DCP."""
         parallel = self.vllm_config.parallel_config
+        spec = self.vllm_config.speculative_config
+        if (
+            spec is not None
+            and self.speculator is not None
+            and spec.method == "dflash"
+            and getattr(self.model_config, "architecture", None) == "Qwen3_5ForConditionalGeneration"
+            and spec.draft_model_config is not None
+            and "DFlash2DraftModel" in (spec.draft_model_config.architectures or ())
+        ):
+            # Qwen's GDN state updates use device counts; its host metadata
+            # needs only length upper bounds. FA3 consumes device lengths;
+            # fallback FIA materializes its own exact device seq_lens.
+            # Require the initialized FA3 draft and audited target backends,
+            # so both the snapshot producer and consumer can skip together.
+            draft_backends = getattr(self.speculator, "attn_backends", {})
+            backends = [group.backend for groups in getattr(self, "attn_groups", []) for group in groups]
+            parallel = self.parallel_config
+            return (
+                spec.parallel_drafting
+                and isinstance(self.model_state, MambaHybridModelState)
+                and bool(draft_backends)
+                and all(backend is AscendFA3Backend for backend in draft_backends.values())
+                and any(backend in (AscendAttentionBackend, AscendQwenFlashAttentionBackend) for backend in backends)
+                and AscendGDNFusedAttentionBackend in backends
+                and all(
+                    backend
+                    in (
+                        AscendAttentionBackend,
+                        AscendQwenFlashAttentionBackend,
+                        AscendGDNFusedAttentionBackend,
+                        AscendFA3Backend,
+                    )
+                    for backend in backends
+                )
+                and parallel.pipeline_parallel_size == 1
+                and parallel.prefill_context_parallel_size == 1
+                and parallel.decode_context_parallel_size == 1
+                and self.ascend_config.kvpp_config.size == 1
+                and self.vllm_config.kv_transfer_config is None
+                and not self.ascend_config.sparse_kv_offload_config.enabled
+                and not spec.enable_adaptive_verification
+            )
+
         if (
             self.model_config.architecture
             not in {"KimiLinearForCausalLM", "KimiK3ForCausalLM", "KimiK3ForConditionalGeneration"}

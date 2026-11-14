@@ -1,4 +1,4 @@
-import ast
+﻿import ast
 from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from types import SimpleNamespace

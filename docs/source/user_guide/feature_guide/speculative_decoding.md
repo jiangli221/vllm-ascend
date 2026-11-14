@@ -1,4 +1,4 @@
-# Speculative Decoding Guide
+﻿# Speculative Decoding Guide
 
 This guide shows how to use Speculative Decoding with vLLM Ascend. Speculative decoding is a technique which improves inter-token latency in memory-bound LLM inference.
 
@@ -6,7 +6,7 @@ This guide shows how to use Speculative Decoding with vLLM Ascend. Speculative d
 
 vLLM Ascend implements speculative decoding through a **proposer-verifier** architecture:
 
-1. **Proposer** (`vllm_ascend/spec_decode/`): Generates draft (speculative) tokens using various methods — from simple n-gram matching to neural-network-based draft models.
+1. **Proposer** (`vllm_ascend/spec_decode/`): Generates draft (speculative) tokens using various methods 鈥?from simple n-gram matching to neural-network-based draft models.
 2. **Rejection Sampler** (`vllm_ascend/sample/`): Verifies draft tokens against the target model's output, accepting matches and rejecting mismatches, with optional optimizations including [Block Verify and Entropy Verify](#block-verify-and-entropy-verify).
 
 The following speculative decoding methods are supported:
@@ -38,7 +38,7 @@ All speculative decoding methods are configured through the `speculative_config`
 - **`draft_tensor_parallel_size`** (int, optional): Tensor parallelism size for the draft model. Can only be `1` or the same as the target model's tensor parallel size.
 - **`disable_padded_drafter_batch`** (bool, default: `False`): Disable input padding for speculative decoding. If set to `True`, speculative input batches can contain sequences of different lengths, which may only be supported by certain attention backends. **Note:** Only effective with `eagle`, `eagle3`, `mtp`, `dflash`, `draft_model`, and `extract_hidden_states` methods.
 
-**Offline inference** — pass `speculative_config` as a Python dict to `LLM()`:
+**Offline inference** 鈥?pass `speculative_config` as a Python dict to `LLM()`:
 
 ```python
 from vllm import LLM
@@ -53,7 +53,7 @@ llm = LLM(
 )
 ```
 
-**Online serving** — pass `--speculative-config` (or `-sc`) as a JSON string:
+**Online serving** 鈥?pass `--speculative-config` (or `-sc`) as a JSON string:
 
 ```shell
 vllm serve path/to/target/model \
@@ -62,7 +62,7 @@ vllm serve path/to/target/model \
 
 !!! note
 
-    On Ascend NPUs, the `npu_fused_infer_attention_score` operator supports a maximum of 16 tokens per decode round. Therefore, `(num_speculative_tokens + 1)` must be ≤ 16.
+    On Ascend NPUs, the `npu_fused_infer_attention_score` operator supports a maximum of 16 tokens per decode round. Therefore, `(num_speculative_tokens + 1)` must be 鈮?16.
 
 ## Speculating by matching n-grams in the prompt
 
@@ -159,7 +159,7 @@ A few important things to consider when using the EAGLE based draft models:
 
 ## Speculating using MTP
 
-MTP (Multi-Token Prediction) boosts inference performance by parallelizing the prediction of multiple tokens, shifting from single-token to multi-token generation. This approach significantly increases generation throughput and achieves multiplicative acceleration in inference speed — all without compromising output quality.
+MTP (Multi-Token Prediction) boosts inference performance by parallelizing the prediction of multiple tokens, shifting from single-token to multi-token generation. This approach significantly increases generation throughput and achieves multiplicative acceleration in inference speed 鈥?all without compromising output quality.
 
 - Offline inference
 
@@ -217,7 +217,7 @@ MTP (Multi-Token Prediction) boosts inference performance by parallelizing the p
 
 !!! note
 
-    Due to the fact that only a single layer of weights is exposed in DeepSeek's MTP, accuracy and performance are not effectively guaranteed in scenarios where `num_speculative_tokens > 1` (especially ≥ 3).
+    Due to the fact that only a single layer of weights is exposed in DeepSeek's MTP, accuracy and performance are not effectively guaranteed in scenarios where `num_speculative_tokens > 1` (especially 鈮?3).
 
     In the fullgraph mode with `num_speculative_tokens > 1`, the capture size of each ACLGraph must be an integer multiple of `(num_speculative_tokens + 1)`.
 
@@ -281,7 +281,7 @@ argmax token, the draft proposes a top-k candidate set for every draft
 position and a candidate-selector head walks the highest-scoring path through
 the candidate lattice.
 
-There is no separate `dflash2` method value: keep `"method": "dflash"` — when
+There is no separate `dflash2` method value: keep `"method": "dflash"` 鈥?when
 the draft checkpoint's architecture is `DFlash2DraftModel` (e.g.
 `z-lab/Qwen3.8-27B-DFlash2`), the DFlash2 drafter is selected automatically.
 
@@ -348,7 +348,7 @@ the *anchor*) followed by K masked queries.
    a per-candidate unary logit plus a bilinear term between predecessor and
    successor token codebooks and the projected hidden state.
 4. A path walk picks the highest-scoring chain of candidates starting from
-   the anchor token — greedily on the default model runner, or with
+   the anchor token 鈥?greedily on the default model runner, or with
    Gumbel-max sampling at the request temperature on model runner V2. On V2
    the selected path's scores are also scattered back into full-vocabulary
    draft logits for the rejection sampler.
@@ -356,7 +356,7 @@ the *anchor*) followed by K masked queries.
 A few important things to consider when using DFlash2 draft models:
 
 1. **Draft sampling**: on the default model runner, DFlash2 always drafts
-   greedily — `"draft_sample_method": "probabilistic"` is rejected. Model
+   greedily 鈥?`"draft_sample_method": "probabilistic"` is rejected. Model
    runner V2 supports both greedy (the default) and probabilistic sampling:
 
     ```shell
@@ -375,7 +375,7 @@ A few important things to consider when using DFlash2 draft models:
 
 3. **Graph capture sizes**: each decode step runs `(1 + K)` tokens per
    request, so every capture size must be `n * (num_speculative_tokens + 1)`
-   for each batch size `n` you want to support — `[9]` above, for batch size
+   for each batch size `n` you want to support 鈥?`[9]` above, for batch size
    1 with `num_speculative_tokens = 8`.
    For `num_speculative_tokens` of 4, 5, or 6, use multiples of 5, 6, or 7,
    respectively. Choose a draft length supported by the checkpoint.
@@ -386,6 +386,133 @@ A few important things to consider when using DFlash2 draft models:
 
 5. The selector parameters (`selector_top_k`, `selector_rank`, ...) come from
    the draft checkpoint's `dflash_config` and need no user configuration.
+
+6. **A2/A3 device-side target and draft lengths**: on model runner V2, installing the
+   optional `flash_attn_npu` distribution exposing `flash_attn_npu_3` with the
+   `get_scheduler_metadata` and `flash_attn_with_kvcache` APIs (the 0.4.2.post2
+   scheduler ABI, also available in 0.5.0) enables the device-length FA3
+   backend for `DFlash2DraftModel` draft layers and their
+   `Qwen3_5ForConditionalGeneration` target, as declared by the verified
+   Qwen3.8-27B checkpoint. Selection checks the target architecture, not the
+   model directory name or the draft's `model_type`. Other target architectures,
+   including Qwen MoE, retain their existing backend. This is a
+   different package from the training-consistency `flash_attn_npu_v3` backend.
+   It consumes exact device lengths after rejection without the draft
+   attention builder's `seq_lens.tolist()` synchronization. Identical layers
+   share device tiling, refreshed before ACL graph replay at stable addresses.
+   Queries use packed TND layout with device query offsets. With
+   `flash_attn_npu` 0.5.0, non-local paged attention at KV capacities of 1024
+   tokens or more still reads lengths on the host inside forward and cannot
+   be graph-captured. For short draft queries, a sliding window smaller than
+   the page-table token capacity avoids that branch; a window covering the
+   entire capacity does not.
+
+   The Qwen target uses a full-context window covering the original page-table
+   capacity and appends one unused page-table column. Exact device KV lengths
+   prevent reads from that column. This is equivalent to full attention while
+   keeping FA3 0.5.0 on its device-length window branch, including long-context
+   prefill and multi-token verification. It avoids both the FIA builder's
+   `seq_lens.tolist()` and FA3's internal global-attention length reads.
+   The extra column allocates only page-table entries, not extra KV pages.
+   The builder refreshes the table and tiling at stable addresses before replay.
+   Eager prefill and decode use the same packed TND layout as FULL graph
+   capture/replay, including variable-width queries. FA3 0.5.0's eager TND
+   boundary check still reads the last device query offset once per attention
+   call, introducing a scalar D2H synchronization even with device tiling.
+   Graph capture skips this check, and replay does not rerun the host check.
+
+   Selection requires FP16/BF16 queries, draft KV with the same dtype, head
+   sizes up to 256, and PP/PCP/DCP sizes of 1. Causal and non-causal sliding windows
+   are preserved. Missing APIs, attention sinks, adaptive verification,
+   multimodal prefixes, batch invariance, and unsupported configurations
+   retain the existing backend. The target backend is selected independently,
+   so a quantized target cache can retain FIA while its unquantized draft uses
+   FA3. With the supported Qwen target using FA3 (or fallback FIA) and fused
+   GDN, the FA3 DFlash2 path also skips the runner's
+   post-sampling length D2H snapshot and its next-step Event wait. Exact
+   rejection-corrected lengths remain on device; CPU lengths remain upper
+   bounds. This requires PP/PCP/DCP and KV parallel sizes of 1, without KV
+   transfer, sparse KV offload, or adaptive verification. A target falling back
+   to FIA still performs its own exact length `tolist()`. Asynchronous output
+   completion events remain necessary to consume generated tokens on the CPU.
+   A5 retains its existing CANN path. Check the backend's numerical and graph
+   replay behavior on A2/A3 with:
+
+    ```shell
+    pytest -sv tests/e2e/pull_request/one_card/test_dflash2_fa3_precision.py
+    pytest -sv tests/e2e/pull_request/one_card/test_qwen_dflash2_fa3_precision.py
+    ```
+
+## Speculating using LiLiCorr
+
+LiLiCorr is a DFlash variant that reranks the per-position top-k candidate
+lattice before target-model verification. It requires a dedicated
+`LiLiCorrDraftModel` checkpoint trained for the target model; a regular DFlash
+or DFlash2 checkpoint cannot be substituted. The configured
+`num_speculative_tokens` should equal the checkpoint's trained block size minus
+one (the example below assumes a block size of eight). Shorter lengths down to
+one token are supported, but may reduce acceptance; measure them with your
+checkpoint and workload. Longer lengths are unsupported.
+
+LiLiCorr currently uses Model Runner V2 and eager draft execution on Ascend.
+Set `VLLM_USE_V2_MODEL_RUNNER=1` and set the nested speculative
+`enforce_eager` option to `true`. The target model retains its independently
+configured execution mode.
+
+```shell
+VLLM_USE_V2_MODEL_RUNNER=1 vllm serve <target-model> \
+  --tensor-parallel-size 1 \
+  --max-model-len 4096 \
+  --no-enable-prefix-caching \
+  --speculative-config '{"method":"dflash","model":"<matching-lilicorr-checkpoint>","num_speculative_tokens":7,"enforce_eager":true}'
+```
+
+Both the plain and convolutional LiLiCorr checkpoint variants are supported.
+The real-weight CI test pairs `Qwen/Qwen3.8-27B` with the ModelScope draft
+`niannianxu/Qwen3.8-27B-LiLiCorr-block8-epoch0`, using TP=2 and seven
+speculative tokens. Both models are listed in the A2/A3 download catalog.
+After the CI model-download job has populated the cache, run:
+
+```shell
+VLLM_USE_MODELSCOPE=True VLLM_USE_V2_MODEL_RUNNER=1 pytest -v \
+  tests/e2e/pull_request/two_card/model_runner_v2/test_qwen3_8_lilicorr.py
+```
+
+The test compares greedy output token IDs with target-only decoding for both
+draft sampling modes, exercises nonzero-temperature probabilistic drafting,
+and checks draft/acceptance metric consistency. Acceptance length is recorded
+for calibration; no unmeasured throughput or acceptance-rate threshold is set.
+
+Standard tensor parallelism is supported. Fine-grained embedding/LM head TP
+and PCP vocabulary weight sharding are currently unsupported; the candidate
+path requires the standard TP vocabulary layout.
+Use the checkpoint's own `dflash_config` values for candidate top-k and
+convolution geometry; these values are part of the trained model and should
+not be tuned at serving time.
+
+Both `draft_sample_method: "greedy"` and `"probabilistic"` use the correlator's
+conditional scores. Probabilistic drafting supplies the realized proposal
+distribution to the rejection sampler and uses a separate random stream from
+target sampling. Compare acceptance length and throughput for both modes with
+your workload. Quantized draft projections require a quantization format
+supported by Ascend; NVIDIA ModelOpt NVFP4 exports are not portable merely
+because the upstream LiLiCorr loader accepts them.
+
+For a latency comparison on NPU, use real checkpoint weights and run the same
+batch and sequence lengths without speculative decoding, with greedy drafts,
+and with probabilistic drafts. For example:
+
+```shell
+VLLM_USE_V2_MODEL_RUNNER=1 vllm bench latency --model <target-model> \
+  --batch-size 8 --input-len 1024 --output-len 128 \
+  --num-iters-warmup 5 --num-iters 30 --output-json lilicorr-latency.json \
+  --speculative-config '{"method":"dflash","model":"<matching-lilicorr-checkpoint>","num_speculative_tokens":7,"enforce_eager":true,"draft_sample_method":"probabilistic"}'
+```
+
+Repeat at the production batch sizes and context lengths, keeping TP size,
+target execution mode, and prefix caching settings fixed. Measure acceptance
+length and serving throughput alongside latency; synthetic prompts alone do
+not establish the production speedup.
 
 ## Speculating using DSpark
 
@@ -491,7 +618,7 @@ For more details, see the
 
 Draft models are often trained on short contexts (e.g. 4-8k tokens). When the
 running context grows far beyond that, the draft's attention goes
-out-of-distribution and the acceptance rate collapses — speculation turns
+out-of-distribution and the acceptance rate collapses 鈥?speculation turns
 into overhead. The **draft KV sliding window** caps only the *draft model's*
 attention to the most recent `draft_window_size` tokens. The target model
 still attends to the full context, so output quality is unchanged.
@@ -540,7 +667,7 @@ options.
   degrades as conversations grow: e.g. an early GLM-5.2 DSpark draft dropped
   from mean acceptance ~5 (short context) to ~1 at 32k; a 512-1024 window
   restored it to ~4.7-5.5, with end-to-end throughput up to +381% at 32k.
-- **Leave it off** when the draft is already stable at long context — the
+- **Leave it off** when the draft is already stable at long context 鈥?the
   window then only removes information the draft could have used. In
   particular, if the draft itself was trained with sliding-window attention
   (its config carries a native `sliding_window`), keep
@@ -550,7 +677,7 @@ options.
   2048-native SWA DSpark draft at 32k input).
 
 Check the effect with the server log: `SpecDecoding metrics: Mean acceptance
-length: ...` lines report the acceptance per interval — compare runs with the
+length: ...` lines report the acceptance per interval 鈥?compare runs with the
 window off and on under your real workload before settling on a value.
 
 ## Speculating using Suffix Decoding
@@ -868,8 +995,8 @@ Block Verify evaluates all draft tokens as a block using cumulative probability 
 
 Entropy Verify adjusts the acceptance threshold based on the entropy of the target distribution:
 
-- **High entropy** (uncertain distribution) → lower effective threshold → more tokens accepted
-- **Low entropy** (confident distribution) → higher effective threshold → stricter rejection
+- **High entropy** (uncertain distribution) 鈫?lower effective threshold 鈫?more tokens accepted
+- **Low entropy** (confident distribution) 鈫?higher effective threshold 鈫?stricter rejection
 
 This entropy-aware threshold is controlled by two parameters:
 
@@ -907,14 +1034,14 @@ Both features can be enabled independently or together. When used together, the 
 
 ## Synthetic Rejection Sampling
 
-In addition to the default `standard` rejection sampling (which accepts a draft token when `target_prob / draft_prob >= uniform`), vLLM Ascend supports **synthetic** rejection sampling. In this mode each draft token at position `i` is accepted with a configured probability `rates[i]`, compared against a uniform random draw — **independent of the target/draft probability match**. The first rejected position stops the request and emits a recovered token; if every draft token is accepted, the bonus token is appended.
+In addition to the default `standard` rejection sampling (which accepts a draft token when `target_prob / draft_prob >= uniform`), vLLM Ascend supports **synthetic** rejection sampling. In this mode each draft token at position `i` is accepted with a configured probability `rates[i]`, compared against a uniform random draw 鈥?**independent of the target/draft probability match**. The first rejected position stops the request and emits a recovered token; if every draft token is accepted, the bonus token is appended.
 
 ### Why use it
 
 Synthetic mode **decouples the verifier's acceptance logic from draft-model quality**, letting you drive the speculative-decoding pipeline at a controlled, fixed acceptance rate. It is useful for:
 
 - **Benchmarking** the verify path (kernel + sampler + token assembly) throughput/latency at a known acceptance rate, without depending on a well-trained drafter.
-- **Kernel validation** — because acceptance reduces to `uniform < rate`, the result is fully determined by the inputs. The e2e test compares the Ascend Triton kernel (`SYNTHETIC_MODE=True`) against the PyTorch reference under identical inputs, so the two must agree bit-for-bit.
+- **Kernel validation** 鈥?because acceptance reduces to `uniform < rate`, the result is fully determined by the inputs. The e2e test compares the Ascend Triton kernel (`SYNTHETIC_MODE=True`) against the PyTorch reference under identical inputs, so the two must agree bit-for-bit.
 - **Stress-testing** the high-acceptance regime of the speculative pipeline.
 
 !!! warning
@@ -960,6 +1087,6 @@ vllm serve path/to/target/model \
 Upstream vLLM's synthetic path draws the per-token uniform numbers with `tl_rand64` (fp64) directly inside the Triton kernel. NPU Triton does **not** support `tl_rand64`/fp64, so vLLM Ascend reimplements synthetic mode per model-runner path:
 
 - **MRV1** (`vllm_ascend/sample/rejection_sampler.py` + `vllm_ascend/ops/triton/reject_sample.py`): the kernels receive the uniform probabilities as an explicit pointer argument instead of generating them internally. The probabilities are produced by `generate_uniform_probs` in fp64 (matching upstream, so the draw never samples exactly `0.0`) and cast to fp32 for the greedy kernels, which the fp32-only Ascend Triton kernels then compare against `rates[pos]`.
-- **MRV2** (`vllm_ascend/worker/v2/spec_decode/rejection_sampler_utils.py`, used when the V2 model runner is enabled): the uniform draw is generated **inside** `_probabilistic_rejection_kernel` with `SYNTHETIC_MODE=True`, using a 1-element-block fp32 `tl.rand` clamped to `[2^-31, 1)` — equivalent to upstream's `includes_zero=False` semantics. Both greedy and sampling temperatures are supported, and the first rejected position is followed by a resampled/bonus token from the target distribution, as in `standard` mode.
+- **MRV2** (`vllm_ascend/worker/v2/spec_decode/rejection_sampler_utils.py`, used when the V2 model runner is enabled): the uniform draw is generated **inside** `_probabilistic_rejection_kernel` with `SYNTHETIC_MODE=True`, using a 1-element-block fp32 `tl.rand` clamped to `[2^-31, 1)` 鈥?equivalent to upstream's `includes_zero=False` semantics. Both greedy and sampling temperatures are supported, and the first rejected position is followed by a resampled/bonus token from the target distribution, as in `standard` mode.
 
 The configuration interface (`rejection_sample_method`, `synthetic_acceptance_rates`, `synthetic_acceptance_length`) is identical on both paths.
