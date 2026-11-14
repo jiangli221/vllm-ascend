@@ -167,3 +167,6 @@ estimated_times:
   tests/e2e/pull_request/one_card/test_model_runner_v1_with_device.py: 70
   tests/e2e/pull_request/one_card/test_msa_index_score.py: 40
   tests/e2e/pull_request/one_card/test_glm5next_pooled_cache_write.py: 30
+  # Bootstrap estimate; refine after the first NPU run.
+  tests/e2e/pull_request/one_card/test_cached_gdn_decode.py: 600
+  tests/e2e/pull_request/one_card/test_gdn_metadata_reuse_v2.py: 600

@@ -15,6 +15,7 @@ from vllm_ascend.worker.v2.aclgraph_utils import ModelAclGraphManager
 from vllm_ascend.worker.v2.input_batch import AscendInputBatch, AscendInputBuffers
 from vllm_ascend.worker.v2.model_runner import NPUModelRunner
 from vllm_ascend.worker.v2.model_states.default import AscendModelState
+from vllm_ascend.worker.v2.model_states.mamba_hybrid import AscendMambaHybridModelState
 
 
 @pytest.fixture
@@ -353,15 +354,23 @@ def test_dummy_slot_mapping_uses_padded_persistent_buffer(buffers, runner):
     runner.block_tables.get_dummy_slot_mappings.assert_called_once_with(2)
 
 
+@pytest.mark.parametrize("state_type", [AscendModelState, AscendMambaHybridModelState])
 @pytest.mark.parametrize(
     "mode,is_dummy,expected_input_tokens",
     [(CUDAGraphMode.PIECEWISE, True, 16), (CUDAGraphMode.PIECEWISE, False, 2), (CUDAGraphMode.NONE, True, 2)],
 )
-def test_attention_keeps_actual_queries_and_padded_dummy_inputs(buffers, mode, is_dummy, expected_input_tokens):
+def test_attention_keeps_actual_queries_and_padded_dummy_inputs(
+    buffers, mode, is_dummy, expected_input_tokens, state_type
+):
     with patch.object(buffers, "dummy_num_tokens", 2), patch("vllm_ascend.worker.v2.input_batch.update_cos_sin"):
         batch = AscendInputBatch.make_dummy(1, 16, buffers)
     batch.is_dummy = is_dummy
-    state = AscendModelState.__new__(AscendModelState)
+    state = state_type.__new__(state_type)
+    state.decoder_replay = None
+    state.recoverssm = None
+    # The bare instance bypasses __init__, so mirror the upstream default that
+    # prepare_attn now consults for the aligned mamba cache path.
+    state._align_mode = False
     state.vllm_config = SimpleNamespace(
         parallel_config=SimpleNamespace(prefill_context_parallel_size=1), num_speculative_tokens=0
     )
@@ -370,7 +379,7 @@ def test_attention_keeps_actual_queries_and_padded_dummy_inputs(buffers, mode, i
     state.kvpp_runtime = None
     state.kvpp_is_dummy_run = False
     state.device_metadata = None
-    with patch("vllm_ascend.worker.v2.model_states.default.build_attn_metadata", return_value={}) as build:
+    with patch(f"{state_type.__module__}.build_attn_metadata", return_value={}) as build:
         assert state.prepare_attn(batch, mode, (), torch.full((1, 16), -1), [], None) == {}
     kwargs = build.call_args.kwargs
     assert kwargs["num_input_tokens"] == expected_input_tokens
